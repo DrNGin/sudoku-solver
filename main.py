@@ -15,6 +15,8 @@ def main(image_path, output_dir="cells"):
     height, width = img.shape[:2]
     scale = 800 / max(height, width)
     img = cv2.resize(img, (int(width * scale), int(height * scale)))
+    
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
 
 print("sudoku solver with opencv :)")
