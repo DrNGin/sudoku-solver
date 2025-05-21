@@ -78,9 +78,32 @@ def main(image_path, output_dir="cells"):
     warped = cv2.warpPerspective(img, M, (side, side))
     warped_gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
     
-    cv2.imshow("Warped Sudoku", warped_gray)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # cv2.imshow("Warped Sudoku", warped_gray)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+    
+    cell_size = side // 9
+    warped = cv2.resize(warped, (cell_size * 9, cell_size * 9))
+    
+    # استخراج سلول‌ها
+    for i in range(9):
+        for j in range(9):
+            # محاسبه مختصات سلول
+            x_start = j * cell_size
+            y_start = i * cell_size
+            x_end = (j + 1) * cell_size
+            y_end = (i + 1) * cell_size
+
+            # استخراج سلول
+            cell = warped[y_start:y_end, x_start:x_end]
+
+            # ذخیره تصویر سلول
+            cell_filename = os.path.join(output_dir, f"cell_{i}_{j}.jpg")
+            cv2.imwrite(cell_filename, cell)
+
+    print(f"سلول‌ها با موفقیت استخراج و در پوشه '{output_dir}' ذخیره شدند.")
+
+    return True
     
 
 print("sudoku solver with opencv :)")
