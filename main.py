@@ -66,6 +66,14 @@ def main(image_path, output_dir="cells"):
     height_b = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
     max_height = max(int(height_a), int(height_b))
     
+    # تنظیم ابعاد به مربع
+    side = max(max_width, max_height)
+    dst = np.array([
+        [0, 0],
+        [side - 1, 0],
+        [side - 1, side - 1],
+        [0, side - 1]], dtype="float32")
+    
     
 
 
