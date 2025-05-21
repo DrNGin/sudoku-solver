@@ -74,8 +74,14 @@ def main(image_path, output_dir="cells"):
         [side - 1, side - 1],
         [0, side - 1]], dtype="float32")
     
+    M = cv2.getPerspectiveTransform(rect, dst)
+    warped = cv2.warpPerspective(img, M, (side, side))
+    warped_gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
     
-
+    cv2.imshow("Warped Sudoku", warped_gray)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    
 
 print("sudoku solver with opencv :)")
 img_path = "images/sudoku.jpg"
