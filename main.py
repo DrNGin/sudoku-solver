@@ -16,6 +16,7 @@ def main(image_path, output_dir="cells"):
     scale = 800 / max(height, width)
     img = cv2.resize(img, (int(width * scale), int(height * scale)))
     
+    # پیش پردازش عکس سودوکو
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (7, 7), 0)
     thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
