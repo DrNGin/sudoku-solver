@@ -17,12 +17,11 @@ def main(image_path, output_dir="cells"):
     img = cv2.resize(img, (int(width * scale), int(height * scale)))
     
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
     blurred = cv2.GaussianBlur(gray, (7, 7), 0)
-    
     thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                                    cv2.THRESH_BINARY_INV, 11, 2)
-    
+    edges = cv2.Canny(thresh, 50, 150)
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
 
 print("sudoku solver with opencv :)")
