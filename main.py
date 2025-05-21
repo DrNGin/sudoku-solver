@@ -42,7 +42,11 @@ def main(image_path, output_dir="cells"):
     if sudoku_contour is None:
         print("خطا: هیچ چهارضلعی‌ای پیدا نشد.")
         return False
-
+    
+    img_contour = img.copy()
+    cv2.drawContours(img_contour, [sudoku_contour], 0, (0, 0, 255), 3)
+    cv2.imshow("Detected Sudoku Contour", img_contour)
+    cv2.waitKey(0)
 
 
 print("sudoku solver with opencv :)")
