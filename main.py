@@ -17,6 +17,10 @@ def main(image_path, output_dir="cells"):
     img = cv2.resize(img, (int(width * scale), int(height * scale)))
     
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    blurred = cv2.GaussianBlur(gray, (7, 7), 0)
+    
+    
 
 
 print("sudoku solver with opencv :)")
