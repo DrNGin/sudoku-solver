@@ -7,6 +7,9 @@ def main(image_path, output_dir="cells"):
         os.makedirs(output_dir)
 
     img = cv2.imread(image_path)
+    if img is None:
+        print("خطا: تصویر بارگذاری نشد.")
+        return False
     
 
 print("sudoku solver with opencv :)")
