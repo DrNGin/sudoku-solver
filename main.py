@@ -11,6 +11,11 @@ def main(image_path, output_dir="cells"):
         print("خطا: تصویر بارگذاری نشد.")
         return False
     
+     # تغییر اندازه تصویر برای پردازش بهتر
+    height, width = img.shape[:2]
+    scale = 800 / max(height, width)
+    img = cv2.resize(img, (int(width * scale), int(height * scale)))
+
 
 print("sudoku solver with opencv :)")
 img_path = "images/sudoku.jpg"
