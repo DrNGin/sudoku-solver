@@ -23,6 +23,26 @@ def main(image_path, output_dir="cells"):
                                    cv2.THRESH_BINARY_INV, 11, 2)
     edges = cv2.Canny(thresh, 50, 150)
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    max_area = 0
+    sudoku_contour = None
+    img_area = img.shape[0] * img.shape[1]  # مساحت کل تصویر
+
+    for contour in contours:
+        peri = cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
+        area = cv2.contourArea(contour)
+
+        # فقط کانتورهایی که چهارضلعی هستند و مساحت بزرگی دارند
+        if len(approx) == 4 and area > 0.2 * img_area:  # حداقل 20٪ مساحت تصویر
+            if area > max_area:
+                max_area = area
+                sudoku_contour = approx
+
+    if sudoku_contour is None:
+        print("خطا: هیچ چهارضلعی‌ای پیدا نشد.")
+        return False
+
 
 
 print("sudoku solver with opencv :)")
