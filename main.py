@@ -234,3 +234,13 @@ class SudokuExtractor:
             print(f"Error: {e}")
             return None
     
+
+def main():
+    """Run the Sudoku extractor and solver."""
+    print("Sudoku solver with custom model :)")
+    extractor = SudokuExtractor("digit_models.h5")
+    return extractor.extract_and_solve("images/sudoku.jpg")
+
+
+if __name__ == "__main__":
+    main()
