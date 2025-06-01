@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 import cv2
 import numpy as np
+import tensorflow as tf
 
 
 @dataclass
@@ -237,7 +238,7 @@ class SudokuExtractor:
 
 def main():
     """Run the Sudoku extractor and solver."""
-    print("Sudoku solver with custom model :)")
+    print("Sudoku solver :)")
     extractor = SudokuExtractor("digit_models.h5")
     return extractor.extract_and_solve("images/sudoku.jpg")
 
