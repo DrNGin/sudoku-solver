@@ -138,3 +138,17 @@ class SudokuExtractor:
         if num in grid[start_row:start_row + 3, start_col:start_col + 3]:
             return False
         return True
+    
+        def _solve_sudoku(self, grid: np.ndarray) -> bool:
+        """Solve the Sudoku puzzle using backtracking."""
+        for row in range(9):
+            for col in range(9):
+                if grid[row, col] == 0:
+                    for num in range(1, 10):
+                        if self._is_valid(grid, row, col, num):
+                            grid[row, col] = num
+                            if self._solve_sudoku(grid):
+                                return True
+                            grid[row, col] = 0
+                    return False
+        return True
