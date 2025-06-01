@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import tensorflow as tf
 import argparse
-from PIL import Image
+
 
 
 @dataclass
