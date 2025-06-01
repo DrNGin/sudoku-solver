@@ -4,6 +4,8 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 import tensorflow as tf
+import argparse
+from PIL import Image
 
 
 @dataclass
@@ -238,9 +240,17 @@ class SudokuExtractor:
 
 def main():
     """Run the Sudoku extractor and solver."""
-    print("Sudoku solver :)")
-    extractor = SudokuExtractor("digit_models.h5")
-    return extractor.extract_and_solve("images/sudoku.jpg")
+    print("Sudoku solver:)")
+    extractor = SudokuExtractor("models/digit_models.h5")
+        
+    parser = argparse.ArgumentParser(
+                description="This script help you solve sudoku with computer vision."
+            )
+    parser.add_argument("image_path", type=str, help="your image location.")
+    arg = parser.parse_args()
+    
+    return extractor.extract_and_solve(arg.image_path)
+
 
 
 if __name__ == "__main__":
