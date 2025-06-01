@@ -1,111 +1,140 @@
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional, Tuple
 import cv2
 import numpy as np
-import os
 
-def main(image_path, output_dir="cells"):
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
 
-    img = cv2.imread(image_path)
-    if img is None:
-        print("خطا: تصویر بارگذاری نشد.")
-        return False
-    
-     # تغییر اندازه تصویر برای پردازش بهتر
-    height, width = img.shape[:2]
-    scale = 800 / max(height, width)
-    img = cv2.resize(img, (int(width * scale), int(height * scale)))
-    
-    # پیش پردازش عکس سودوکو
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (7, 7), 0)
-    thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                   cv2.THRESH_BINARY_INV, 11, 2)
-    edges = cv2.Canny(thresh, 50, 150)
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    max_area = 0
-    sudoku_contour = None
-    img_area = img.shape[0] * img.shape[1]  # مساحت کل تصویر
+@dataclass
+class ImageTransform:
+    """Stores image transformation data."""
+    warped: np.ndarray
+    side: int
+    contour: np.ndarray
+    resized_img: np.ndarray
 
-    for contour in contours:
-        peri = cv2.arcLength(contour, True)
-        approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
-        area = cv2.contourArea(contour)
 
-        # فقط کانتورهایی که چهارضلعی هستند و مساحت بزرگی دارند
-        if len(approx) == 4 and area > 0.2 * img_area:  # حداقل 20٪ مساحت تصویر
-            if area > max_area:
+class SudokuExtractor:
+    """Extracts digits from a Sudoku image, solves it, and generates a visual output."""
+
+    def __init__(self, model_path: str, output_dir: str = "cells"):
+        """Initialize with a trained model and output directory."""
+        self.model = tf.keras.models.load_model(model_path)
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(exist_ok=True)
+        self.original_grid = None
+
+    def _preprocess_cell(self, cell: np.ndarray, row: int, col: int) -> np.ndarray:
+        """Preprocess a single cell image for digit recognition."""
+        gray = cv2.cvtColor(cell, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        thresh = cv2.adaptiveThreshold(
+            blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2
+        )
+        kernel = np.ones((3, 3), np.uint8)
+        thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=1)
+
+        height, width = thresh.shape
+        border = int(min(height, width) * 0.1)
+        thresh = thresh[border:height - border, border:width - border]
+        thresh = cv2.resize(thresh, (28, 28), interpolation=cv2.INTER_CUBIC)
+        thresh = thresh.astype('float32') / 255.0
+
+        cv2.imwrite(str(self.output_dir / f"processed_cell_{row}_{col}.jpg"), thresh * 255)
+        return np.expand_dims(thresh, axis=-1)
+
+    def _extract_number(self, cell: np.ndarray, row: int, col: int) -> int:
+        """Extract a digit from a cell image."""
+        processed_cell = self._preprocess_cell(cell, row, col)
+        if np.mean(processed_cell) < 0.05:
+            return 0
+
+        input_image = np.expand_dims(processed_cell, axis=0)
+        prediction = self.model.predict(input_image, verbose=0)
+        confidence = np.max(prediction)
+        number = np.argmax(prediction, axis=1)[0]
+
+        return 0 if confidence < 0.7 and np.mean(processed_cell) < 0.1 else int(number)
+
+    def _remove_grid_lines(self, warped: np.ndarray) -> np.ndarray:
+        """Remove grid lines from the Sudoku image."""
+        gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+        thresh = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 9, 3
+        )
+        cv2.imwrite(str(self.output_dir / "thresh.jpg"), thresh)
+
+        kernel_h = np.ones((1, 20), np.uint8)
+        kernel_v = np.ones((20, 1), np.uint8)
+        horizontal = cv2.dilate(thresh, kernel_h, iterations=2)
+        vertical = cv2.dilate(thresh, kernel_v, iterations=2)
+        grid = cv2.add(horizontal, vertical)
+        cleaned = cv2.bitwise_and(thresh, cv2.bitwise_not(grid))
+        kernel = np.ones((3, 3), np.uint8)
+        cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel, iterations=2)
+        cv2.imwrite(str(self.output_dir / "cleaned_sudoku.jpg"), cleaned)
+        return cleaned
+
+    def _find_sudoku_contour(self, image: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Find the largest quadrilateral contour in the image."""
+        height, width = image.shape[:2]
+        scale = 800 / max(height, width)
+        resized = cv2.resize(image, (int(width * scale), int(height * scale)))
+
+        gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (7, 7), 0)
+        thresh = cv2.adaptiveThreshold(
+            blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 9, 3
+        )
+        edges = cv2.Canny(thresh, 30, 120)
+        contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        max_area = 0
+        sudoku_contour = None
+        img_area = resized.shape[0] * resized.shape[1]
+
+        for contour in contours:
+            peri = cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
+            area = cv2.contourArea(contour)
+            if len(approx) == 4 and area > 0.1 * img_area and area > max_area:
                 max_area = area
                 sudoku_contour = approx
 
-    if sudoku_contour is None:
-        print("خطا: هیچ چهارضلعی‌ای پیدا نشد.")
-        return False
-    
-    # img_contour = img.copy()
-    # cv2.drawContours(img_contour, [sudoku_contour], 0, (0, 0, 255), 3)
-    # cv2.imshow("Detected Sudoku Contour", img_contour)
-    # cv2.waitKey(0)
+        if sudoku_contour is None:
+            cv2.imwrite(str(self.output_dir / "edges.jpg"), edges)
+            raise ValueError("Sudoku grid not detected. Please check the image.")
 
-    points = sudoku_contour.reshape(4, 2)
-    rect = np.zeros((4, 2), dtype="float32")
-    s = points.sum(axis=1)
-    rect[0] = points[np.argmin(s)]  # بالا-چپ
-    rect[2] = points[np.argmax(s)]  # پایین-راست
-    diff = np.diff(points, axis=1)
-    rect[1] = points[np.argmin(diff)]  # بالا-راست
-    rect[3] = points[np.argmax(diff)]  # پایین-چپ
-    
-    # محاسبه ابعاد جدول
-    (tl, tr, br, bl) = rect
-    width_a = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
-    width_b = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
-    max_width = max(int(width_a), int(width_b))
-    height_a = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
-    height_b = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
-    max_height = max(int(height_a), int(height_b))
-    
-    # تنظیم ابعاد به مربع
-    side = max(max_width, max_height)
-    dst = np.array([
-        [0, 0],
-        [side - 1, 0],
-        [side - 1, side - 1],
-        [0, side - 1]], dtype="float32")
-    
-    M = cv2.getPerspectiveTransform(rect, dst)
-    warped = cv2.warpPerspective(img, M, (side, side))
-    warped_gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
-    
-    # cv2.imshow("Warped Sudoku", warped_gray)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-    
-    cell_size = side // 9
-    warped = cv2.resize(warped, (cell_size * 9, cell_size * 9))
-    
-    # استخراج سلول‌ها
-    for i in range(9):
-        for j in range(9):
-            # محاسبه مختصات سلول
-            x_start = j * cell_size
-            y_start = i * cell_size
-            x_end = (j + 1) * cell_size
-            y_end = (i + 1) * cell_size
+        return sudoku_contour, resized
 
-            # استخراج سلول
-            cell = warped[y_start:y_end, x_start:x_end]
+    def _warp_image(self, image: np.ndarray, contour: np.ndarray) -> Tuple[np.ndarray, int]:
+        """Warp the image to a square perspective based on the contour."""
+        points = contour.reshape(4, 2)
+        rect = np.zeros((4, 2), dtype="float32")
+        s = points.sum(axis=1)
+        rect[0], rect[2] = points[np.argmin(s)], points[np.argmax(s)]
+        diff = np.diff(points, axis=1)
+        rect[1], rect[3] = points[np.argmin(diff)], points[np.argmax(diff)]
 
-            # ذخیره تصویر سلول
-            cell_filename = os.path.join(output_dir, f"cell_{i}_{j}.jpg")
-            cv2.imwrite(cell_filename, cell)
+        width_a = np.sqrt(((rect[2][0] - rect[3][0]) ** 2) + ((rect[2][1] - rect[3][1]) ** 2))
+        width_b = np.sqrt(((rect[1][0] - rect[0][0]) ** 2) + ((rect[1][1] - rect[0][1]) ** 2))
+        height_a = np.sqrt(((rect[1][0] - rect[2][0]) ** 2) + ((rect[1][1] - rect[2][1]) ** 2))
+        height_b = np.sqrt(((rect[0][0] - rect[3][0]) ** 2) + ((rect[0][1] - rect[3][1]) ** 2))
 
-    print(f"سلول‌ها با موفقیت استخراج و در پوشه '{output_dir}' ذخیره شدند.")
+        side = max(int(max(width_a, width_b)), int(max(height_a, height_b)))
+        dst = np.array([[0, 0], [side - 1, 0], [side - 1, side - 1], [0, side - 1]], dtype="float32")
+        M = cv2.getPerspectiveTransform(rect, dst)
+        warped = cv2.warpPerspective(image, M, (side, side))
+        cv2.imwrite(str(self.output_dir / "warped_sudoku.jpg"), warped)
+        return warped, side
 
-    return True
-    
-
-print("sudoku solver with opencv :)")
-img_path = "images/sudoku.jpg"
-main(img_path)
+    def _is_valid(self, grid: np.ndarray, row: int, col: int, num: int) -> bool:
+        """Check if placing a number in the given position is valid."""
+        if num in grid[row, :]:
+            return False
+        if num in grid[:, col]:
+            return False
+        start_row, start_col = 3 * (row // 3), 3 * (col // 3)
+        if num in grid[start_row:start_row + 3, start_col:start_col + 3]:
+            return False
+        return True
