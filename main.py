@@ -139,7 +139,7 @@ class SudokuExtractor:
             return False
         return True
     
-        def _solve_sudoku(self, grid: np.ndarray) -> bool:
+    def _solve_sudoku(self, grid: np.ndarray) -> bool:
         """Solve the Sudoku puzzle using backtracking."""
         for row in range(9):
             for col in range(9):
@@ -152,3 +152,85 @@ class SudokuExtractor:
                             grid[row, col] = 0
                     return False
         return True
+    
+    def _create_solved_image(self, transform: ImageTransform, grid: np.ndarray) -> None:
+        """Create an image with the solved Sudoku grid overlaid."""
+        output_image = transform.warped.copy()
+        cell_size = transform.side // 9
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = cell_size / 40
+        thickness = max(1, int(cell_size / 30))
+        original_color = (0, 0, 255)  # Red for original digits
+        solved_color = (0, 255, 0)  # Green for solved digits
+
+        for i in range(9):
+            for j in range(9):
+                if grid[i, j] != 0:
+                    x = j * cell_size + int(cell_size * 0.35)
+                    y = i * cell_size + int(cell_size * 0.65)
+                    color = solved_color if grid[i, j] != self.original_grid[i, j] else original_color
+                    cv2.putText(
+                        output_image,
+                        str(grid[i, j]),
+                        (x, y),
+                        font,
+                        font_scale,
+                        color,
+                        thickness,
+                        cv2.LINE_AA
+                    )
+
+        cv2.imwrite(str(self.output_dir / "solved_sudoku.jpg"), output_image)
+
+    def extract_and_solve(self, image_path: str) -> Optional[np.ndarray]:
+        """Extract and solve the Sudoku grid from an image, generating a solved image."""
+        try:
+            image_path = Path(image_path)
+            if not image_path.exists():
+                raise FileNotFoundError(f"Image file not found at: {image_path.absolute()}")
+
+            img = cv2.imread(str(image_path))
+            if img is None:
+                raise ValueError("Failed to load image. Check file format or path.")
+
+            contour, resized_img = self._find_sudoku_contour(img)
+            cv2.imwrite(
+                str(self.output_dir / "detected_contour.jpg"),
+                cv2.drawContours(resized_img.copy(), [contour], 0, (0, 0, 255), 3)
+            )
+
+            warped, side = self._warp_image(resized_img, contour)
+            cleaned = self._remove_grid_lines(warped)
+            cell_size = side // 9
+            cleaned = cv2.resize(cleaned, (cell_size * 9, cell_size * 9))
+            warped = cv2.resize(warped, (cell_size * 9, cell_size * 9))
+
+            sudoku_grid = np.zeros((9, 9), dtype=int)
+            for i in range(9):
+                for j in range(9):
+                    x_start, y_start = j * cell_size, i * cell_size
+                    cell = cleaned[y_start:y_start + cell_size, x_start:x_start + cell_size]
+                    cv2.imwrite(str(self.output_dir / f"cell_{i}_{j}.jpg"), cell)
+                    sudoku_grid[i, j] = self._extract_number(
+                        warped[y_start:y_start + cell_size, x_start:x_start + cell_size], i, j
+                    )
+
+            self.original_grid = sudoku_grid.copy()
+            print("Original Sudoku grid:")
+            print(sudoku_grid)
+
+            if not self._solve_sudoku(sudoku_grid):
+                print("Warning: Could not solve the Sudoku puzzle.")
+            else:
+                print("Sudoku solved successfully!")
+                print("Solved Sudoku grid:")
+                print(sudoku_grid)
+
+            self._create_solved_image(ImageTransform(warped, side, contour, resized_img), sudoku_grid)
+            print(f"Cells and solved image saved to '{self.output_dir}'.")
+            return sudoku_grid
+
+        except Exception as e:
+            print(f"Error: {e}")
+            return None
+    
